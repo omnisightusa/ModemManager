@@ -1,0 +1,7 @@
+Created a container in VS Code, ubuntu focal
+
+sudo apt-get install meson pkg-config cmake libglib2.0-dev libdebus-1-dev bash-completion libgudev-1.0 udev systemd libsystemd-dev libpolkit-gobject-1-dev libmbim-glib-dev
+
+
+meson setup build --prefix=/usr --sysconfdir=/etc
+

@@ -382,11 +382,12 @@ mm_ublox_parse_urat_test_response (const gchar  *response,
      * E.g.:
      *  AT+URAT=?
      *  +URAT: (0-6),(0,2,3)
+     * Can be three groups with the 6401 modules.
      */
     response = mm_strip_tag (response, "+URAT:");
     split = mm_split_string_groups (response);
     split_len = g_strv_length (split);
-    if (split_len > 2 || split_len < 1) {
+    if (split_len > 3 || split_len < 1) {
         inner_error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_FAILED,
                                    "Unexpected number of groups in +URAT=? response: %u", g_strv_length (split));
         goto out;
@@ -926,6 +927,17 @@ static const BandConfiguration band_configuration[] = {
                       MM_MODEM_BAND_EUTRAN_4,  MM_MODEM_BAND_EUTRAN_5,  MM_MODEM_BAND_EUTRAN_8,
                       MM_MODEM_BAND_EUTRAN_12, MM_MODEM_BAND_EUTRAN_13, MM_MODEM_BAND_EUTRAN_19,
                       MM_MODEM_BAND_EUTRAN_20, MM_MODEM_BAND_EUTRAN_28 }
+    },
+    {
+        .model    = "LARA-R6401D",
+        .method   = SETTINGS_UPDATE_METHOD_COPS,
+        .uact     = FEATURE_UNSUPPORTED,
+        .ubandsel = FEATURE_UNSUPPORTED,
+        .mode     = MM_MODEM_MODE_4G,
+        .bands_4g = {  MM_MODEM_BAND_EUTRAN_2, 
+                      MM_MODEM_BAND_EUTRAN_4,  MM_MODEM_BAND_EUTRAN_5, 
+                      MM_MODEM_BAND_EUTRAN_12, MM_MODEM_BAND_EUTRAN_13, MM_MODEM_BAND_EUTRAN_14,
+                      MM_MODEM_BAND_EUTRAN_66, MM_MODEM_BAND_EUTRAN_71 }
     },
 };
 
