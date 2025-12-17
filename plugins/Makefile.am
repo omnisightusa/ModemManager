@@ -1350,6 +1350,8 @@ libmm_plugin_quectel_la_SOURCES = \
 	quectel/mm-shared-quectel.h \
 	quectel/mm-broadband-modem-quectel.c \
 	quectel/mm-broadband-modem-quectel.h \
+	quectel/mm-sim-quectel.c \
+	quectel/mm-sim-quectel.h \
 	$(NULL)
 if WITH_QMI
 libmm_plugin_quectel_la_SOURCES += \

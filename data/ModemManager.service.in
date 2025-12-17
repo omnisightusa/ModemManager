@@ -7,7 +7,7 @@ ConditionVirtualization=!container
 [Service]
 Type=dbus
 BusName=org.freedesktop.ModemManager1
-ExecStart=@sbindir@/ModemManager
+ExecStart=@sbindir@/ModemManager --debug
 StandardError=null
 Restart=on-abort
 CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN

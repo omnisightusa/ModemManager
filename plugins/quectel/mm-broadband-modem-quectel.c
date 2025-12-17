@@ -20,6 +20,8 @@
 #include "mm-iface-modem-location.h"
 #include "mm-iface-modem-time.h"
 #include "mm-shared-quectel.h"
+#include "mm-sim-quectel.h"
+#include "mm-log.h"
 
 static void iface_modem_init          (MMIfaceModem         *iface);
 static void iface_modem_firmware_init (MMIfaceModemFirmware *iface);
@@ -64,11 +66,32 @@ mm_broadband_modem_quectel_init (MMBroadbandModemQuectel *self)
 {
 }
 
+static MMBaseSim *
+modem_create_sim_finish (MMIfaceModem  *self,
+                         GAsyncResult  *res,
+                         GError       **error)
+{
+    return mm_sim_quectel_new_finish (res, error);
+}
+
+static void
+modem_create_sim (MMIfaceModem        *self,
+                  GAsyncReadyCallback  callback,
+                  gpointer             user_data)
+{
+    mm_sim_quectel_new (MM_BASE_MODEM (self),
+                      NULL, /* cancellable */
+                      callback,
+                      user_data);
+}
+
 static void
 iface_modem_init (MMIfaceModem *iface)
 {
     iface_modem_parent = g_type_interface_peek_parent (iface);
 
+    iface->create_sim = modem_create_sim;
+    iface->create_sim_finish = modem_create_sim_finish;
     iface->setup_sim_hot_swap = mm_shared_quectel_setup_sim_hot_swap;
     iface->setup_sim_hot_swap_finish = mm_shared_quectel_setup_sim_hot_swap_finish;
     iface->cleanup_sim_hot_swap = mm_shared_quectel_cleanup_sim_hot_swap;

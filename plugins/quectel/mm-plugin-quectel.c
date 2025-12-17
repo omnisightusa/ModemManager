@@ -84,9 +84,10 @@ G_MODULE_EXPORT MMPlugin *
 mm_plugin_create (void)
 {
     static const gchar *subsystems[] = { "tty", "net", "usbmisc", "wwan", NULL };
-    static const gchar *vendor_strings[] = { "quectel", NULL };
+    static const gchar *vendor_strings[] = { "quectel", "WEM", NULL };
     static const guint16 vendor_ids[] = {
         0x2c7c, /* usb vid */
+        0x3838, /* usb eagle vid */
         0x1eac, /* pci vid */
         0 };
 
