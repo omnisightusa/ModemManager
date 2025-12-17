@@ -3442,7 +3442,7 @@ mm_3gpp_parse_cind_test_response (const gchar *reply,
     while (isspace (*reply))
         reply++;
 
-    r = g_regex_new ("\\(([^,]*),\\((\\d+)[-,](\\d+).*\\)", G_REGEX_UNGREEDY, 0, NULL);
+    r = g_regex_new ("\\(([^,]*),\\((\\d+)?[-,]?(\\d+)?\\)\\)|(?<=,)(?=,)", G_REGEX_UNGREEDY, 0, NULL);
     g_assert (r);
 
     hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) cind_response_free);
@@ -4081,7 +4081,7 @@ mm_3gpp_get_ip_family_from_pdp_type (const gchar *pdp_type)
 {
     if (!pdp_type)
         return MM_BEARER_IP_FAMILY_NONE;
-    if (g_str_equal (pdp_type, "IP"))
+    if (g_str_equal (pdp_type, "IP") || g_str_equal (pdp_type, "PPP"))
         return MM_BEARER_IP_FAMILY_IPV4;
     if (g_str_equal (pdp_type, "IPV4"))
         return MM_BEARER_IP_FAMILY_IPV4;

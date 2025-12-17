@@ -71,6 +71,7 @@ struct _MMBroadbandModemUbloxPrivate {
     GRegex *pbready_regex;
 };
 
+
 /*****************************************************************************/
 /* Per-model configuration loading */
 
@@ -1122,10 +1123,10 @@ static void
 ublox_setup_ciev_handler (MMIfaceModem *self,
                           guint simind_idx)
 {
-    g_autoptr(GRegex)  pattern = NULL;
-    g_autofree gchar  *ciev_regex = NULL;
-    MMPortSerialAt    *primary_port;
-    MMPortSerialAt    *secondary_port;
+    GRegex *pattern;
+    gchar *ciev_regex;
+    MMPortSerialAt *primary_port;
+    MMPortSerialAt *secondary_port;
 
     primary_port = mm_base_modem_peek_port_primary (MM_BASE_MODEM (self));
     mm_obj_dbg (self, "setting up simind 'CIEV: %d' events handler", simind_idx);
@@ -1149,6 +1150,9 @@ ublox_setup_ciev_handler (MMIfaceModem *self,
             (MMPortSerialAtUnsolicitedMsgFn) ublox_ciev_unsolicited_handler,
             self,
             NULL);
+
+    g_regex_unref (pattern);
+    g_free (ciev_regex);
 }
 
 static void
@@ -1193,9 +1197,10 @@ cind_simind_format_check_ready (MMBroadbandModem *self,
     const gchar *result;
     CindResponse *r;
 
+    
     result = mm_base_modem_at_command_finish (MM_BASE_MODEM (self), res, &error);
     if (error ||
-        !(indicators = mm_3gpp_parse_cind_test_response (result, &error))) {
+        !(indicators = mm_3gpp_parse_cind_test_response(result, &error))) {
         mm_obj_dbg (self, "+CIND check failed: %s", error->message);
         g_prefix_error (&error, "CIND check failed: ");
         g_task_return_error (task, error);
@@ -1983,10 +1988,14 @@ mm_broadband_modem_ublox_new (const gchar  *device,
                          MM_BASE_MODEM_PLUGIN,     plugin,
                          MM_BASE_MODEM_VENDOR_ID,  vendor_id,
                          MM_BASE_MODEM_PRODUCT_ID, product_id,
-                         MM_IFACE_MODEM_SIM_HOT_SWAP_SUPPORTED, TRUE,
+                         MM_IFACE_MODEM_SIM_HOT_SWAP_SUPPORTED, FALSE,
                          /* Generic bearer (TTY) and u-blox bearer (NET) supported */
-                         MM_BASE_MODEM_DATA_NET_SUPPORTED, TRUE,
+                         //MM_BASE_MODEM_DATA_NET_SUPPORTED, TRUE,
                          MM_BASE_MODEM_DATA_TTY_SUPPORTED, TRUE,
+			 /* Disabling period checks to see if the module stays up longer (maybe memory leak)*/
+			 MM_IFACE_MODEM_PERIODIC_ACCESS_TECH_CHECK_DISABLED, TRUE,
+			 MM_IFACE_MODEM_PERIODIC_SIGNAL_CHECK_DISABLED, TRUE,
+
                          NULL);
 }
 
@@ -2007,6 +2016,20 @@ mm_broadband_modem_ublox_init (MMBroadbandModemUblox *self)
     self->priv->udtmfd_support = FEATURE_SUPPORT_UNKNOWN;
     self->priv->pbready_regex = g_regex_new ("\\r\\n\\+PBREADY\\r\\n",
                                              G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, NULL);
+}
+
+static void
+modem_load_ublox_ip_families (MMIfaceModem *self,
+                                  GAsyncReadyCallback callback,
+                                  gpointer user_data)
+{
+    GTask *task;
+
+    task = g_task_new (self, NULL, callback, user_data);
+    /* Assume IPv4 + IPv6 + IPv4v6 supported */
+    g_task_return_int (task,
+                       MM_BEARER_IP_FAMILY_IPV4);
+    g_object_unref (task);
 }
 
 static void
@@ -2043,6 +2066,7 @@ iface_modem_init (MMIfaceModem *iface)
     iface->setup_sim_hot_swap = modem_setup_sim_hot_swap;
     iface->setup_sim_hot_swap_finish = modem_setup_sim_hot_swap_finish;
     iface->cleanup_sim_hot_swap = modem_cleanup_sim_hot_swap;
+    iface->load_supported_ip_families = modem_load_ublox_ip_families;
 }
 
 static void
@@ -2091,3 +2115,4 @@ mm_broadband_modem_ublox_class_init (MMBroadbandModemUbloxClass *klass)
 
     broadband_modem_class->setup_ports = setup_ports;
 }
+

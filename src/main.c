@@ -180,7 +180,7 @@ main (int argc, char *argv[])
     /* Early register all known errors */
     register_dbus_errors ();
 
-    mm_info ("ModemManager (version " MM_DIST_VERSION ") starting in %s bus...",
+    mm_info ("ModemManager (version " MM_DIST_VERSION "~omnisight) starting in %s bus...",
              mm_context_get_test_session () ? "session" : "system");
 
     /* Detect runtime charset conversion support */
