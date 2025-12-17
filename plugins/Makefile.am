@@ -1373,6 +1373,7 @@ libmm_plugin_quectel_la_LDFLAGS = $(PLUGIN_COMMON_LINKER_FLAGS)
 libmm_plugin_quectel_la_LIBADD = $(builddir)/libhelpers-quectel.la
 
 dist_udevrules_DATA += quectel/77-mm-quectel-port-types.rules
+dist_udevrules_DATA += quectel/77-mm-eagle-port-types.rules
 AM_CFLAGS += -DTESTUDEVRULESDIR_QUECTEL=\"${srcdir}/quectel\"
 
 endif

@@ -743,6 +743,7 @@ if plugins_options['quectel']
   }}
 
   plugins_udev_rules += files('quectel/77-mm-quectel-port-types.rules')
+  plugins_udev_rules += files('quectel/77-mm-eagle-port-types.rules')
 endif
 
 # plugin: samsung
