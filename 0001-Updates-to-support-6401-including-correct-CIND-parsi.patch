@@ -1,0 +1,191 @@
+From 6a7f444b785973532ef6df616d4c498c639a67ff Mon Sep 17 00:00:00 2001
+From: root <root@omnisight-radar.localdomain>
+Date: Wed, 17 Dec 2025 13:10:43 -0500
+Subject: [PATCH] Updates to support 6401 including correct CIND parsing,
+ correct URAT parsing, and PPP ip type to prevent errors.
+
+---
+ deploy.sh                                |  1 +
+ plugins/ublox/mm-broadband-modem-ublox.c | 39 +++++++++++++++++++-----
+ plugins/ublox/mm-modem-helpers-ublox.c   | 13 +++++++-
+ src/main.c                               |  2 +-
+ src/mm-modem-helpers.c                   |  4 +--
+ 5 files changed, 48 insertions(+), 11 deletions(-)
+ create mode 100755 deploy.sh
+
+diff --git a/deploy.sh b/deploy.sh
+new file mode 100755
+index 00000000..0797453d
+--- /dev/null
++++ b/deploy.sh
+@@ -0,0 +1 @@
++cp build/plugins/libmm-plugin-ublox.so /usr/lib/aarch64-linux-gnu/ModemManager/libmm-plugin-ublox.so
+diff --git a/plugins/ublox/mm-broadband-modem-ublox.c b/plugins/ublox/mm-broadband-modem-ublox.c
+index e070b750..ad6a728c 100644
+--- a/plugins/ublox/mm-broadband-modem-ublox.c
++++ b/plugins/ublox/mm-broadband-modem-ublox.c
+@@ -71,6 +71,7 @@ struct _MMBroadbandModemUbloxPrivate {
+     GRegex *pbready_regex;
+ };
+ 
++
+ /*****************************************************************************/
+ /* Per-model configuration loading */
+ 
+@@ -1122,10 +1123,10 @@ static void
+ ublox_setup_ciev_handler (MMIfaceModem *self,
+                           guint simind_idx)
+ {
+-    g_autoptr(GRegex)  pattern = NULL;
+-    g_autofree gchar  *ciev_regex = NULL;
+-    MMPortSerialAt    *primary_port;
+-    MMPortSerialAt    *secondary_port;
++    GRegex *pattern;
++    gchar *ciev_regex;
++    MMPortSerialAt *primary_port;
++    MMPortSerialAt *secondary_port;
+ 
+     primary_port = mm_base_modem_peek_port_primary (MM_BASE_MODEM (self));
+     mm_obj_dbg (self, "setting up simind 'CIEV: %d' events handler", simind_idx);
+@@ -1149,6 +1150,9 @@ ublox_setup_ciev_handler (MMIfaceModem *self,
+             (MMPortSerialAtUnsolicitedMsgFn) ublox_ciev_unsolicited_handler,
+             self,
+             NULL);
++
++    g_regex_unref (pattern);
++    g_free (ciev_regex);
+ }
+ 
+ static void
+@@ -1193,9 +1197,10 @@ cind_simind_format_check_ready (MMBroadbandModem *self,
+     const gchar *result;
+     CindResponse *r;
+ 
++    
+     result = mm_base_modem_at_command_finish (MM_BASE_MODEM (self), res, &error);
+     if (error ||
+-        !(indicators = mm_3gpp_parse_cind_test_response (result, &error))) {
++        !(indicators = mm_3gpp_parse_cind_test_response(result, &error))) {
+         mm_obj_dbg (self, "+CIND check failed: %s", error->message);
+         g_prefix_error (&error, "CIND check failed: ");
+         g_task_return_error (task, error);
+@@ -1983,10 +1988,14 @@ mm_broadband_modem_ublox_new (const gchar  *device,
+                          MM_BASE_MODEM_PLUGIN,     plugin,
+                          MM_BASE_MODEM_VENDOR_ID,  vendor_id,
+                          MM_BASE_MODEM_PRODUCT_ID, product_id,
+-                         MM_IFACE_MODEM_SIM_HOT_SWAP_SUPPORTED, TRUE,
++                         MM_IFACE_MODEM_SIM_HOT_SWAP_SUPPORTED, FALSE,
+                          /* Generic bearer (TTY) and u-blox bearer (NET) supported */
+-                         MM_BASE_MODEM_DATA_NET_SUPPORTED, TRUE,
++                         //MM_BASE_MODEM_DATA_NET_SUPPORTED, TRUE,
+                          MM_BASE_MODEM_DATA_TTY_SUPPORTED, TRUE,
++			 /* Disabling period checks to see if the module stays up longer (maybe memory leak)*/
++			 MM_IFACE_MODEM_PERIODIC_ACCESS_TECH_CHECK_DISABLED, TRUE,
++			 MM_IFACE_MODEM_PERIODIC_SIGNAL_CHECK_DISABLED, TRUE,
++
+                          NULL);
+ }
+ 
+@@ -2009,6 +2018,20 @@ mm_broadband_modem_ublox_init (MMBroadbandModemUblox *self)
+                                              G_REGEX_RAW | G_REGEX_OPTIMIZE, 0, NULL);
+ }
+ 
++static void
++modem_load_ublox_ip_families (MMIfaceModem *self,
++                                  GAsyncReadyCallback callback,
++                                  gpointer user_data)
++{
++    GTask *task;
++
++    task = g_task_new (self, NULL, callback, user_data);
++    /* Assume IPv4 + IPv6 + IPv4v6 supported */
++    g_task_return_int (task,
++                       MM_BEARER_IP_FAMILY_IPV4);
++    g_object_unref (task);
++}
++
+ static void
+ iface_modem_init (MMIfaceModem *iface)
+ {
+@@ -2043,6 +2066,7 @@ iface_modem_init (MMIfaceModem *iface)
+     iface->setup_sim_hot_swap = modem_setup_sim_hot_swap;
+     iface->setup_sim_hot_swap_finish = modem_setup_sim_hot_swap_finish;
+     iface->cleanup_sim_hot_swap = modem_cleanup_sim_hot_swap;
++    iface->load_supported_ip_families = modem_load_ublox_ip_families;
+ }
+ 
+ static void
+@@ -2091,3 +2115,4 @@ mm_broadband_modem_ublox_class_init (MMBroadbandModemUbloxClass *klass)
+ 
+     broadband_modem_class->setup_ports = setup_ports;
+ }
++
+diff --git a/plugins/ublox/mm-modem-helpers-ublox.c b/plugins/ublox/mm-modem-helpers-ublox.c
+index 84a7cf27..66480b64 100644
+--- a/plugins/ublox/mm-modem-helpers-ublox.c
++++ b/plugins/ublox/mm-modem-helpers-ublox.c
+@@ -355,7 +355,7 @@ mm_ublox_parse_urat_test_response (const gchar  *response,
+     response = mm_strip_tag (response, "+URAT:");
+     split = mm_split_string_groups (response);
+     split_len = g_strv_length (split);
+-    if (split_len > 2 || split_len < 1) {
++    if (split_len > 3 || split_len < 1) {
+         inner_error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_FAILED,
+                                    "Unexpected number of groups in +URAT=? response: %u", g_strv_length (split));
+         goto out;
+@@ -805,6 +805,17 @@ static const BandConfiguration band_configuration[] = {
+         .bands_3g = { MM_MODEM_BAND_UTRAN_1 },
+         .bands_4g = { MM_MODEM_BAND_EUTRAN_3, MM_MODEM_BAND_EUTRAN_8, MM_MODEM_BAND_EUTRAN_28 }
+     },
++    {
++        .model    = "LARA-R6401D",
++        .method   = SETTINGS_UPDATE_METHOD_COPS,
++        .uact     = FEATURE_UNSUPPORTED,
++        .ubandsel = FEATURE_UNSUPPORTED,
++        .mode     = MM_MODEM_MODE_4G,
++        .bands_4g = {  MM_MODEM_BAND_EUTRAN_2,
++                      MM_MODEM_BAND_EUTRAN_4,  MM_MODEM_BAND_EUTRAN_5,
++                      MM_MODEM_BAND_EUTRAN_12, MM_MODEM_BAND_EUTRAN_13, MM_MODEM_BAND_EUTRAN_14,
++                      MM_MODEM_BAND_EUTRAN_66, MM_MODEM_BAND_EUTRAN_71 }
++   },
+     {
+         .model    = "LARA-R3121",
+         .method   = SETTINGS_UPDATE_METHOD_COPS,
+diff --git a/src/main.c b/src/main.c
+index 024c31f7..84ec578c 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -180,7 +180,7 @@ main (int argc, char *argv[])
+     /* Early register all known errors */
+     register_dbus_errors ();
+ 
+-    mm_info ("ModemManager (version " MM_DIST_VERSION ") starting in %s bus...",
++    mm_info ("ModemManager (version " MM_DIST_VERSION "~omnisight) starting in %s bus...",
+              mm_context_get_test_session () ? "session" : "system");
+ 
+     /* Detect runtime charset conversion support */
+diff --git a/src/mm-modem-helpers.c b/src/mm-modem-helpers.c
+index 93d9fda0..bc065dc4 100644
+--- a/src/mm-modem-helpers.c
++++ b/src/mm-modem-helpers.c
+@@ -3442,7 +3442,7 @@ mm_3gpp_parse_cind_test_response (const gchar *reply,
+     while (isspace (*reply))
+         reply++;
+ 
+-    r = g_regex_new ("\\(([^,]*),\\((\\d+)[-,](\\d+).*\\)", G_REGEX_UNGREEDY, 0, NULL);
++    r = g_regex_new ("\\(([^,]*),\\((\\d+)?[-,]?(\\d+)?\\)\\)|(?<=,)(?=,)", G_REGEX_UNGREEDY, 0, NULL);
+     g_assert (r);
+ 
+     hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) cind_response_free);
+@@ -4081,7 +4081,7 @@ mm_3gpp_get_ip_family_from_pdp_type (const gchar *pdp_type)
+ {
+     if (!pdp_type)
+         return MM_BEARER_IP_FAMILY_NONE;
+-    if (g_str_equal (pdp_type, "IP"))
++    if (g_str_equal (pdp_type, "IP") || g_str_equal (pdp_type, "PPP"))
+         return MM_BEARER_IP_FAMILY_IPV4;
+     if (g_str_equal (pdp_type, "IPV4"))
+         return MM_BEARER_IP_FAMILY_IPV4;
+-- 
+2.34.1
+

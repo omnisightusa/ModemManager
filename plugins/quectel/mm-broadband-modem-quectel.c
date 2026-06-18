@@ -16,6 +16,8 @@
 #include <config.h>
 
 #include "mm-broadband-modem-quectel.h"
+#include "mm-broadband-bearer-quectel.h"
+#include "mm-log-object.h"
 #include "mm-iface-modem-firmware.h"
 #include "mm-iface-modem-location.h"
 #include "mm-iface-modem-time.h"
@@ -54,9 +56,9 @@ mm_broadband_modem_quectel_new (const gchar  *device,
                          MM_BASE_MODEM_PLUGIN, plugin,
                          MM_BASE_MODEM_VENDOR_ID, vendor_id,
                          MM_BASE_MODEM_PRODUCT_ID, product_id,
-                         /* Generic bearer supports TTY only */
-                         MM_BASE_MODEM_DATA_NET_SUPPORTED, FALSE,
-                         MM_BASE_MODEM_DATA_TTY_SUPPORTED, TRUE,
+                         /* ECM bearer via AT+QNETDEVCTL: use net port, not PPP */
+                         MM_BASE_MODEM_DATA_NET_SUPPORTED, TRUE,
+                         MM_BASE_MODEM_DATA_TTY_SUPPORTED, FALSE,
                          MM_IFACE_MODEM_SIM_HOT_SWAP_SUPPORTED, TRUE,
                          NULL);
 }
@@ -85,6 +87,50 @@ modem_create_sim (MMIfaceModem        *self,
                       user_data);
 }
 
+/*****************************************************************************/
+/* Create bearer (Modem interface) */
+
+static MMBaseBearer *
+modem_create_bearer_finish (MMIfaceModem  *self,
+                            GAsyncResult  *res,
+                            GError       **error)
+{
+    return g_task_propagate_pointer (G_TASK (res), error);
+}
+
+static void
+quectel_bearer_new_ready (GObject      *source,
+                          GAsyncResult *res,
+                          GTask        *task)
+{
+    MMBaseBearer *bearer;
+    GError       *error = NULL;
+
+    bearer = mm_broadband_bearer_quectel_new_finish (res, &error);
+    if (!bearer)
+        g_task_return_error (task, error);
+    else
+        g_task_return_pointer (task, bearer, g_object_unref);
+    g_object_unref (task);
+}
+
+static void
+modem_create_bearer (MMIfaceModem        *self,
+                     MMBearerProperties  *properties,
+                     GAsyncReadyCallback  callback,
+                     gpointer             user_data)
+{
+    GTask *task;
+
+    task = g_task_new (self, NULL, callback, user_data);
+    mm_obj_dbg (self, "creating Quectel ECM bearer...");
+    mm_broadband_bearer_quectel_new (MM_BROADBAND_MODEM (self),
+                                     properties,
+                                     NULL, /* cancellable */
+                                     (GAsyncReadyCallback) quectel_bearer_new_ready,
+                                     task);
+}
+
 static void
 iface_modem_init (MMIfaceModem *iface)
 {
@@ -92,6 +138,8 @@ iface_modem_init (MMIfaceModem *iface)
 
     iface->create_sim = modem_create_sim;
     iface->create_sim_finish = modem_create_sim_finish;
+    iface->create_bearer = modem_create_bearer;
+    iface->create_bearer_finish = modem_create_bearer_finish;
     iface->setup_sim_hot_swap = mm_shared_quectel_setup_sim_hot_swap;
     iface->setup_sim_hot_swap_finish = mm_shared_quectel_setup_sim_hot_swap_finish;
     iface->cleanup_sim_hot_swap = mm_shared_quectel_cleanup_sim_hot_swap;

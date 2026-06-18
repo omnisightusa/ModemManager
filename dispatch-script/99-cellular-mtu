@@ -1,0 +1,27 @@
+#!/bin/sh
+# Apply the LTE path MTU reported by ModemManager (from AT+CGCONTRDP) to the
+# cellular data interface, overriding the value the modem's ECM DHCP server
+# advertises (which reflects the ECM tunnel, not the LTE link).
+#
+# Fires on "up" and "dhcp4-change" so DHCP renewals don't silently revert it.
+
+ACTION="$2"
+case "$ACTION" in
+    up|dhcp4-change) ;;
+    *) exit 0 ;;
+esac
+
+[ "$CONNECTION_TYPE" = "gsm" ] || exit 0
+[ -n "$IP4_IFACE" ] || exit 0
+
+MODEM_PATH=$(mmcli -L 2>/dev/null | grep -oP '/org/freedesktop/ModemManager1/Modem/\d+' | head -1)
+[ -n "$MODEM_PATH" ] || exit 0
+
+BEARER_PATH=$(mmcli -m "$MODEM_PATH" 2>/dev/null | grep -oP '/org/freedesktop/ModemManager1/Bearer/\d+' | head -1)
+[ -n "$BEARER_PATH" ] || exit 0
+
+MTU=$(mmcli -b "$BEARER_PATH" 2>/dev/null | grep -oP '(?<=mtu: )\d+')
+[ -n "$MTU" ] && [ "$MTU" -gt 500 ] 2>/dev/null || exit 0
+
+logger -t "nm-cellular-mtu" "Setting $IP4_IFACE MTU=$MTU (from $BEARER_PATH)"
+ip link set dev "$IP4_IFACE" mtu "$MTU"

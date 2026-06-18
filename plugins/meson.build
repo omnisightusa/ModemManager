@@ -722,6 +722,7 @@ if plugins_options['quectel']
 
   sources = files(
     'quectel/mm-broadband-modem-quectel.c',
+    'quectel/mm-broadband-bearer-quectel.c',
     'quectel/mm-plugin-quectel.c',
     'quectel/mm-shared-quectel.c',
     'quectel/mm-sim-quectel.c'
